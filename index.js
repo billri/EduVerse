@@ -75,7 +75,7 @@ app.post('/questions', async (req, res) => {
 });
 
 
-//Post an answer
+
 
 // Post an answer
 app.post('/answers', async (req, res) => {
