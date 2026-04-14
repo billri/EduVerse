@@ -2,6 +2,12 @@ const express = require('express');
 const app = express();
 const PORT = 8000;
 const db = require('./db');
+const cors = require('cors');
+app.use(cors());
+
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = 'your-secret-key';   
 
 // Middleware to parse JSON
 app.use(express.json());
@@ -23,27 +29,51 @@ app.get('/users', async (req, res) => {
 });
 
 
-// Create a new user
-app.post('/users', async (req, res) => {
+// Create a new user//Register
+app.post('/register', async (req, res) => {
   try {
-    const { username, email, password, role, reputation } = req.body;
+    const { username, email, password, role } = req.body;
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const [rows] = await db.query(
       `INSERT INTO users (username, email, password, role, reputation)
-       VALUES (?, ?, ?, ?, ?)`,
-      [username, email, password, role, reputation]
+       VALUES (?, ?, ?, ?, 0)`,
+      [username, email, hashedPassword, role || 'student']
     );
 
-    res.json({
-      message: "User created",
-      id: rows.insertId
-    });
-
+    res.json({ message: 'User created', id: rows.insertId });
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Database error');
+    res.status(500).send('Database error: ' + err.message);
   }
 });
+
+// Login
+app.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const [rows] = await db.query(
+      'SELECT * FROM users WHERE email = ?', [email]
+    );
+    const user = rows[0];
+
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
+  } catch (err) {
+    res.status(500).send('Database error: ' + err.message);
+  }
+});
+
 
 //Get all subjects
 app.get('/subjects', async (req, res) => {
